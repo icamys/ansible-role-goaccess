@@ -1,0 +1,13 @@
+---
+goaccess_version: "1.2"
+goaccess_data_path: /srv/data
+goaccess_log_path: /srv/logs
+goaccess_report_path: /srv/report
+goaccess_bind_addr: 127.0.0.1
+goaccess_ws_domain: 127.0.0.1
+goaccess_proxy_port: 37890
+goaccess_port: 7890
+goaccess_proxy_url: /ws/
+goaccess_service_log_path: /var/log
+goaccess_geoip_lib_path: ""
+goaccess_geoip_lib_filename: ""

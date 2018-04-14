@@ -1,0 +1,116 @@
+---
+- name: Update repositories cache and install packages
+  apt:
+    name: "{{ item }}"
+    update_cache: yes
+  with_items:
+    - build-essential
+    - libncurses-dev
+    - libncursesw5-dev
+    - libmaxminddb-dev
+
+- name: Creating data directory if it doesn't exist
+  file:
+    path: "{{ goaccess_data_path }}"
+    state: directory
+    mode: 0755
+
+- name: Creating report directory if it doesn't exist
+  file:
+    path: "{{ goaccess_report_path }}"
+    state: directory
+    mode: 0755
+
+- name: Copy conf file
+  template:
+    src: "{{ role_path }}/templates/goaccess.conf.j2"
+    dest: "{{ goaccess_data_path }}/goaccess.conf"
+    owner: root
+    group: root
+    force: yes
+    mode: 0644
+
+- name: Setting GeoIP usage
+  replace:
+    path: "{{ goaccess_data_path }}/goaccess.conf"
+    regexp: '\#(geoip-database) /usr/local/share/GeoIP/GeoLiteCity.dat'
+    replace: '\1 {{ goaccess_geoip_lib_path }}/{{ goaccess_geoip_lib_filename }}'
+  when: goaccess_geoip_lib_path != "" and goaccess_geoip_lib_filename != ""
+
+- name: Getting sources
+  get_url:
+    url: "http://tar.goaccess.io/goaccess-{{ goaccess_version }}.tar.gz"
+    dest: /usr/src/goaccess.tar.gz
+
+- name: Creating a directory for sources if it doesn't exist
+  file:
+    path: /usr/src/goaccess
+    state: directory
+    mode: 0755
+
+- name: Extract sources
+  unarchive:
+    src: /usr/src/goaccess.tar.gz
+    dest: /usr/src/goaccess
+    extra_opts: "--strip-components=1"
+    remote_src: yes
+
+- name: Configure makefile
+  command: |
+    ./configure \
+      --enable-utf8 \
+      --enable-geoip=mmdb
+  args:
+    chdir: /usr/src/goaccess
+
+- name: Run makefile
+  make:
+    chdir: /usr/src/goaccess
+
+- name: Run makefile install
+  make:
+    chdir: /usr/src/goaccess
+    target: install
+
+- name: Removing downloaded sources
+  file:
+    path: "/usr/src/{{ item }}"
+    state: absent
+  with_items:
+    - goaccess.tar.gz
+    - goaccess
+
+- name: Copy conf file
+  template:
+    src: "{{ role_path }}/templates/goaccessreport.j2"
+    dest: "/usr/sbin/goaccessreport"
+    owner: root
+    group: root
+    force: yes
+    mode: 0755
+
+- name: Copy service file
+  template:
+    src: "{{ role_path }}/templates/goaccess.service.j2"
+    dest: "/etc/systemd/system/goaccess.service"
+
+- name: Check service status
+  command: systemctl status goaccess.service
+  ignore_errors: true
+  register: service_status
+
+- name: Restart service if active
+  systemd:
+    state: restarted
+    daemon_reload: yes
+    name: goaccess
+    enabled: yes
+  when: "'running' in service_status.stdout"
+
+- name: Starting service if inactive
+  systemd:
+    state: started
+    daemon_reload: yes
+    name: goaccess
+    enabled: yes
+  when: "'running' not in service_status.stdout"
